@@ -1,49 +1,107 @@
 <?php
+
 require("core/conn.php");
-//VALORES POR DEFECTO A LA POSIBLE RESPUESTA DEL BACKEND
-$arreglo = array("success" => false, "status" => 400, "data" => "", "message" => "", "cant" => 0);
+
+// Valores por defecto
+$arreglo = array(
+    "success" => false,
+    "status" => array(
+        "status_code" => 400,
+        "status_text" => "Bad Request"
+    ),
+    "data" => "",
+    "message" => "",
+    "cant" => 0
+);
+
+// Content-Type por defecto
+$contenttype = "Content-Type: application/json";
 
 if ($_SERVER["REQUEST_METHOD"] === "GET") {
-    //ES METODO GET
+
+    // Verificamos que exista el parametro type
     if (isset($_GET["type"]) && $_GET["type"] != "") {
-        //SI SE HA ENVIADO EL PARAMETRO DE SELECCION DE FORMATO DE RESPUESTA
+
         $Conexion = new conexion;
         $conn = $Conexion->conectar();
-        $datos = $conn->query('SELECT * FROM empleado');
+
+        $datos = $conn->query("SELECT * FROM empleado");
         $resultados = $datos->fetchAll();
-        $cantidad = sizeof($resultados);
 
         switch ($_GET["type"]) {
+
             case "json":
-                result_json($resultados);
+
+                $arreglo = array(
+                    "success" => true,
+                    "status" => array(
+                        "status_code" => 200,
+                        "status_text" => "OK"
+                    ),
+                    "data" => $resultados,
+                    "message" => "",
+                    "cant" => sizeof($resultados)
+                );
+
                 break;
+
             case "xml":
-                result_xml($resultados);
-                break;
+
+                $contenttype = "Content-Type: text/xml";
+
+                $xml = new SimpleXMLElement("<empleados/>");
+
+                foreach ($resultados as $empleado) {
+
+                    $subnodo = $xml->addChild("empleado");
+
+                    foreach ($empleado as $campo => $valor) {
+
+                        // Evitamos campos numéricos duplicados de PDO
+                        if (!is_numeric($campo)) {
+                            $subnodo->addChild($campo, htmlspecialchars($valor));
+                        }
+                    }
+                }
+
+                header($contenttype);
+                echo $xml->asXML();
+                exit;
+
             default:
-                echo ("POR FAVOR DEFINA EL FORMATO DE RESULTADO QUE ESPERA");
+
+                $arreglo = array(
+                    "success" => false,
+                    "status" => array(
+                        "status_code" => 412,
+                        "status_text" => "Precondition Failed"
+                    ),
+                    "data" => "",
+                    "message" => "Por favor defina un formato valido: json o xml",
+                    "cant" => 0
+                );
+
                 break;
         }
+
     } else {
-        //NO SE HA ENVIADO EL PARAMETRO ESPERADO
-        $contenttype = "Content-Type: application/json";
+
+        // No se envio type
         $arreglo = array(
             "success" => false,
             "status" => array(
                 "status_code" => 412,
-                "status_text" => "Precondition failed"
+                "status_text" => "Precondition Failed"
             ),
             "data" => "",
             "message" => "SE ESPERABA EL PARAMETRO 'type', CON EL TIPO DE RESULTADO ESPERADO",
             "cant" => 0
         );
-        header($contenttype);
-        header("HTTP/1.1 " . $arreglo["status"]["status_code"] . " " . $arreglo["status"]["status_text"]);
-        echo (json_encode($arreglo));
     }
+
 } else {
-    //NO ES EL METODO GET
-    $contenttype = "Content-Type: application/json";
+
+    // Metodo diferente de GET
     $arreglo = array(
         "success" => false,
         "status" => array(
@@ -56,39 +114,16 @@ if ($_SERVER["REQUEST_METHOD"] === "GET") {
     );
 }
 
+// Enviamos los headers
 header($contenttype);
-header("HTTP/1.1 " . $arreglo["status"]["status_code"] . " " . $arreglo["status"]["status_text"]);
-echo (json_encode($arreglo));
+header(
+    "HTTP/1.1 " .
+    $arreglo["status"]["status_code"] .
+    " " .
+    $arreglo["status"]["status_text"]
+);
 
-function result_json()
-{
-    $arreglo = array(
-        "success" => true,
-        "status" => array(
-            "status_code" => 200,
-            "status_text" => "OK"
-        ),
-        "data" => $resultados,
-        "message" => "",
-        "cant" => sizeof($resultados)
-    );
-
-    header($contenttype);
-    header("HTTP/1.1 " . $arreglo["status"]["status_code"] . " " . $arreglo["status"]["status_text"]);
-    echo (json_encode($arreglo));
-}
-
-function resul_xml()
-{
-    $contenttype = "Content-Type: text/xml";
-    $xml = SimpleXMLElement('<empleados/>');
-    foreach ($resultados as $i => $v) {
-        $subnodo = $xml->addChild("empleado");
-        $a = array_flip($v);
-        array_walk_recursive($a, array($subnodo, 'addChild'));
-    }
-    header($contenttype);
-    echo ($xml->asXML);
-}
+// Respuesta JSON
+echo json_encode($arreglo);
 
 ?>
